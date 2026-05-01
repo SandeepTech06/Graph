@@ -30,8 +30,22 @@ const parsePositiveInt = (value, name) => {
   return parsed;
 };
 
+const parseDate = (value, name) => {
+  const parsed = moment(value, 'YYYY-MM-DD', true);
+
+  if (!parsed.isValid()) {
+    throw new Error(`${name} must be in YYYY-MM-DD format. Received "${value}".`);
+  }
+
+  return parsed.startOf('day');
+};
+
+const fillDays = hasFlag('--fill-days');
 const commitCount = parsePositiveInt(getArgValue('--count', '200'), '--count');
 const daysWindow = parsePositiveInt(getArgValue('--days', '365'), '--days');
+const commitsPerDay = parsePositiveInt(getArgValue('--per-day', '1'), '--per-day');
+const fromDateArg = getArgValue('--from', null);
+const toDateArg = getArgValue('--to', null);
 const noPush = hasFlag('--no-push');
 const dryRun = hasFlag('--dry-run');
 
@@ -43,6 +57,32 @@ const randomDate = () =>
     .startOf('day')
     .add(randomInt(1440), 'minutes')
     .format();
+
+const buildFillDates = () => {
+  const toDate = toDateArg ? parseDate(toDateArg, '--to') : moment().startOf('day');
+  const fromDate = fromDateArg
+    ? parseDate(fromDateArg, '--from')
+    : toDate.clone().subtract(daysWindow - 1, 'days');
+
+  if (toDate.isBefore(fromDate, 'day')) {
+    throw new Error(`--to (${toDate.format('YYYY-MM-DD')}) cannot be before --from (${fromDate.format('YYYY-MM-DD')}).`);
+  }
+
+  const dates = [];
+  const cursor = fromDate.clone();
+
+  while (cursor.isSameOrBefore(toDate, 'day')) {
+    for (let i = 0; i < commitsPerDay; i += 1) {
+      dates.push(cursor.clone().add(randomInt(1440), 'minutes').format());
+    }
+
+    cursor.add(1, 'day');
+  }
+
+  return dates;
+};
+
+const buildRandomDates = () => Array.from({ length: commitCount }, () => randomDate());
 
 const ensureRepoState = async () => {
   const isRepo = await git.checkIsRepo();
@@ -60,11 +100,9 @@ const ensureRepoState = async () => {
   }
 };
 
-const createCommit = async (index) => {
-  const date = randomDate();
-
+const createCommit = async (date, index, total) => {
   if (dryRun) {
-    console.log(`[dry-run] commit ${index + 1}/${commitCount} -> ${date}`);
+    console.log(`[dry-run] commit ${index + 1}/${total} -> ${date}`);
     return;
   }
 
@@ -81,7 +119,7 @@ const createCommit = async (index) => {
   await git.add([FILE_PATH]);
   await git.commit(`chore: backfill commit ${index + 1}`, { '--date': date });
 
-  console.log(`created commit ${index + 1}/${commitCount} -> ${date}`);
+  console.log(`created commit ${index + 1}/${total} -> ${date}`);
 };
 
 const main = async () => {
@@ -89,8 +127,15 @@ const main = async () => {
     await ensureRepoState();
   }
 
-  for (let i = 0; i < commitCount; i += 1) {
-    await createCommit(i);
+  const commitDates = fillDays ? buildFillDates() : buildRandomDates();
+  const totalCommits = commitDates.length;
+
+  if (totalCommits === 0) {
+    throw new Error('No commit dates generated. Check your --days/--from/--to options.');
+  }
+
+  for (let i = 0; i < totalCommits; i += 1) {
+    await createCommit(commitDates[i], i, totalCommits);
   }
 
   if (dryRun || noPush) {
