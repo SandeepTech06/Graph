@@ -44,12 +44,26 @@ const fillDays = hasFlag('--fill-days');
 const commitCount = parsePositiveInt(getArgValue('--count', '200'), '--count');
 const daysWindow = parsePositiveInt(getArgValue('--days', '365'), '--days');
 const commitsPerDay = parsePositiveInt(getArgValue('--per-day', '1'), '--per-day');
+const perDayMinArg = getArgValue('--per-day-min', null);
+const perDayMaxArg = getArgValue('--per-day-max', null);
+const hasPerDayRangeArgs = perDayMinArg !== null || perDayMaxArg !== null;
+const commitsPerDayMin = perDayMinArg === null ? commitsPerDay : parsePositiveInt(perDayMinArg, '--per-day-min');
+const commitsPerDayMax = perDayMaxArg === null ? commitsPerDay : parsePositiveInt(perDayMaxArg, '--per-day-max');
 const fromDateArg = getArgValue('--from', null);
 const toDateArg = getArgValue('--to', null);
 const noPush = hasFlag('--no-push');
 const dryRun = hasFlag('--dry-run');
 
 const randomInt = (max) => Math.floor(Math.random() * max);
+const randomIntInRange = (min, max) => min + randomInt(max - min + 1);
+
+if (commitsPerDayMin > commitsPerDayMax) {
+  throw new Error(`--per-day-min (${commitsPerDayMin}) cannot be greater than --per-day-max (${commitsPerDayMax}).`);
+}
+
+if (hasPerDayRangeArgs && !fillDays) {
+  throw new Error('--per-day-min/--per-day-max can only be used with --fill-days.');
+}
 
 const randomDate = () =>
   moment()
@@ -72,7 +86,12 @@ const buildFillDates = () => {
   const cursor = fromDate.clone();
 
   while (cursor.isSameOrBefore(toDate, 'day')) {
-    for (let i = 0; i < commitsPerDay; i += 1) {
+    const commitsToday =
+      commitsPerDayMin === commitsPerDayMax
+        ? commitsPerDayMin
+        : randomIntInRange(commitsPerDayMin, commitsPerDayMax);
+
+    for (let i = 0; i < commitsToday; i += 1) {
       dates.push(cursor.clone().add(randomInt(1440), 'minutes').format());
     }
 

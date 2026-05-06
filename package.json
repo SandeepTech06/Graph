@@ -8,6 +8,8 @@
     "graph:dry": "node index.js --dry-run",
     "graph:fill": "node index.js --fill-days --days 30 --per-day 1",
     "graph:fill:dry": "node index.js --fill-days --days 30 --per-day 1 --dry-run",
+    "graph:fill:random": "node index.js --fill-days --days 30 --per-day-min 1 --per-day-max 6",
+    "graph:fill:random:dry": "node index.js --fill-days --days 30 --per-day-min 1 --per-day-max 6 --dry-run",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
